@@ -3,6 +3,38 @@ SDN controller latency measuring tool
 
 ![latte](./resources/latte.jpg)
 
+## Usage
+  1. Install Go
+  2. Install dependencies
+  
+  ```bash
+  go get github.com/VividCortex/gohistogram
+  go get github.com/google/gopacket
+  ```
+  3. Build latte
+  
+  ```bash
+  # PCAP version
+  go build latte_pcap.go
+  ```
+  or 
+  ```bash
+  # PF_RING version
+  go build latte_pfring.go
+  ```
+  4. Run latte to monitor OF traffic (port=6653) on the controller interface
+  
+  ```bash
+  sudo ./latte_pfring <ifname>
+  ```
+  
+  5. Exit latte and get latency histogram
+  
+  ```bash
+  ^C
+  ```
+
+
 ## Sample latency histogram
 - Results are in milliseconds
 - Controller: ODL Beryllium RC2
