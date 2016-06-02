@@ -7,7 +7,8 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/pfring"
+	//	"github.com/google/gopacket/pfring"
+	//	"encoding/binary"
 	"log"
 	"os"
 	"os/signal"
@@ -34,6 +35,34 @@ var (
 	lostPackets  int64
 )
 
+type OF14Layer struct {
+	of_version byte
+	of_type    byte
+	of_length  [2]byte
+	xid        [4]byte
+	of_payload []byte
+}
+
+//var OF14LayerType = gopacket.RegisterLayerType(
+//	9999,
+//	gopacket.LayerTypeMetadata{
+//		"OF14LayerType",
+//		gopacket.DecodeFunc(decodeOF14Layer),
+//	})
+
+//func (l OF14Layer) LayerType() gopacket.LayerType {
+//	return OF14LayerType
+//}
+
+//func (l OF14Layer) OF14Header() []byte {
+//	return []byte{l.of_version, l.of_type, l.of_length, l.xid}
+//}
+
+//func decodeOF14Layer(data []byte, p gopacket.PacketBuilder) error {
+//	p.AddLayer(&OF14Layer{data[0], data[1], data[2:3], data[4:7], data[8:]})
+//	return nil
+//}
+
 // TODO: use arrays instead of maps in Cbench tests
 // TODO: further optimizations
 func main() {
@@ -44,7 +73,7 @@ func main() {
 	fmt.Println("device: ", *device)
 	fmt.Println("cpuprofile: ", *cpuprofile)
 	fmt.Println("ofport: ", *ofport)
-	fmt.Println("sniflib: ", *ofport)
+	fmt.Println("sniflib: ", *sniflib)
 
 	var f *os.File
 	if *cpuprofile != "" {
@@ -90,14 +119,14 @@ func main() {
 		}
 		packetSource = gopacket.NewPacketSource(handle, handle.LinkType())
 	} else if *sniflib == "pfring" {
-		ring, err := pfring.NewRing(*device, 65536, pfring.FlagPromisc)
-		if err != nil {
-			log.Fatal(err)
-		}
-		err = ring.SetBPFFilter(filter)
-		err = ring.Enable()
-		packetSource = gopacket.NewPacketSource(ring, layers.LayerTypeEthernet)
-		ring.SetSocketMode(pfring.ReadOnly)
+		//		ring, err := pfring.NewRing(*device, 65536, pfring.FlagPromisc)
+		//		if err != nil {
+		//			log.Fatal(err)
+		//		}
+		//		err = ring.SetBPFFilter(filter)
+		//		err = ring.Enable()
+		//		packetSource = gopacket.NewPacketSource(ring, layers.LayerTypeEthernet)
+		//		ring.SetSocketMode(pfring.ReadOnly)
 
 	}
 
@@ -128,6 +157,13 @@ func main() {
 			case layers.LayerTypeTCP:
 				src := int32(tcp.SrcPort)
 				dst := int32(tcp.DstPort)
+				if len(tcp.Payload) > 8 {
+					of_version := int8(tcp.Payload[0])
+					of_type := int8(tcp.Payload[1])
+					//of_xid := binary.BigEndian.Uint64(tcp.Payload[4:7])
+					fmt.Println(time.Now(), src, dst, of_version, of_type)
+				}
+
 				if dst == int32(ofp) {
 					packets_in[src] = time.Now().UnixNano()
 				}
@@ -136,7 +172,9 @@ func main() {
 					latency := time.Now().UnixNano() - packets_in[dst]
 					h.Add(float64(latency / 1000000.0))
 				}
+
 			}
+
 		}
 	}
 }
