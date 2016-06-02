@@ -101,38 +101,42 @@ func main() {
 
 	}
 
+	// Layers for decoding
 	var (
-		ethLayer layers.Ethernet
-		ipLayer layers.IPv4
-		tcpLayer layers.TCP
+		eth     layers.Ethernet
+		ip      layers.IPv4
+		tcp     layers.TCP
+		payload gopacket.Payload
 	)
 
+	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet, &eth, &ip, &tcp, &payload)
+	decoded := []gopacket.LayerType{}
+
 	for packet := range packetSource.Packets() {
-		parser := gopacket.NewDecodingLayerParser(
-			layers.LayerTypeEthernet,
-			&ethLayer, 
-			&ipLayer, 
-			&tcpLayer,
-		)
-		
-		foundLayerTypes := []gopacket.LayerType{}
-		err := parser.DecodeLayers(packet.Data(), &foundLayerTypes)
+
+		err := parser.DecodeLayers(packet.Data(), &decoded)
 		if err != nil {
 			fmt.Println("Trouble decoding layers: ", err)
 		}
-
-		//tcpLayer := packet.Layer(layers.LayerTypeTCP)
-		//tcp, _ := tcpLayer.(*layers.TCP)
-		src := int32(tcpLayer.SrcPort)
-		dst := int32(tcpLayer.DstPort)
-		if dst == int32(ofp) {
-			packets_in[src] = time.Now().UnixNano()
+		if len(decoded) == 0 {
+			fmt.Println("Packed contained no valid layers")
+			continue
 		}
 
-		if src == int32(ofp) {
-			latency := time.Now().UnixNano() - packets_in[dst]
-			h.Add(float64(latency / 1000000.0))
-		}
+		for _, layerType := range decoded {
+			switch layerType {
+			case layers.LayerTypeTCP:
+				src := int32(tcp.SrcPort)
+				dst := int32(tcp.DstPort)
+				if dst == int32(ofp) {
+					packets_in[src] = time.Now().UnixNano()
+				}
 
+				if src == int32(ofp) {
+					latency := time.Now().UnixNano() - packets_in[dst]
+					h.Add(float64(latency / 1000000.0))
+				}
+			}
+		}
 	}
 }
