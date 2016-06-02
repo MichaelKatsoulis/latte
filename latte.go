@@ -101,11 +101,30 @@ func main() {
 
 	}
 
+	var (
+		ethLayer layers.Ethernet
+		ipLayer layers.IPv4
+		tcpLayer layers.TCP
+	)
+
 	for packet := range packetSource.Packets() {
-		tcpLayer := packet.Layer(layers.LayerTypeTCP)
-		tcp, _ := tcpLayer.(*layers.TCP)
-		src := int32(tcp.SrcPort)
-		dst := int32(tcp.DstPort)
+		parser := gopacket.NewDecodingLayerParser(
+			layers.LayerTypeEthernet,
+			&ethLayer, 
+			&ipLayer, 
+			&tcpLayer,
+		)
+		
+		foundLayerTypes := []gopacket.LayerType{}
+		err := parser.DecodeLayers(packet.Data(), &foundLayerTypes)
+		if err != nil {
+			fmt.Println("Trouble decoding layers: ", err)
+		}
+
+		//tcpLayer := packet.Layer(layers.LayerTypeTCP)
+		//tcp, _ := tcpLayer.(*layers.TCP)
+		src := int32(tcpLayer.SrcPort)
+		dst := int32(tcpLayer.DstPort)
 		if dst == int32(ofp) {
 			packets_in[src] = time.Now().UnixNano()
 		}
