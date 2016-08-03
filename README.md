@@ -1,34 +1,33 @@
+[![Build Status](https://travis-ci.org/anastop/latte.svg?branch=master)](https://travis-ci.org/anastop/latte)
+
 # latte
 SDN controller latency measuring tool 
+
+__NOTE__: under development
 
 ![latte](./resources/latte.jpg)
 
 ## Usage
-  1. Install Go
-  2. Install dependencies
+  1. Install Go and init your `GOPATH` env variable, 
+  e.g. 
+  ```bash
+  export GOPATH=$HOME/gocode/
+  ```
+
+  2. Fetch and build latte:
   
   ```bash
-  go get github.com/VividCortex/gohistogram
-  go get github.com/google/gopacket
-  ```
-  3. Build latte
-  
-  ```bash
-  # PCAP version
-  go build latte_pcap.go
-  ```
-  or 
-  ```bash
-  # PF_RING version
-  go build latte_pfring.go
-  ```
-  4. Run latte to monitor OF traffic (port=6653) on the controller interface
-  
-  ```bash
-  sudo ./latte_pfring <ifname>
+  go get github.com/anastop/latte
+  go install github.com/anastop/latte
   ```
   
-  5. Exit latte and get latency histogram
+  3. Run latte to monitor OF traffic (port=6653) on the controller interface:
+  
+  ```bash
+  sudo $GOPATH/bin/latte -device lo -ofport 6653 -sniffer pcap
+  ```
+  
+  4. Stop latte and get latency histogram
   
   ```bash
   ^C
