@@ -3,14 +3,21 @@ package matching
 import (
 	"encoding/binary"
 	"github.com/anastop/latte/ofp14"
+	"net"
 )
+
+var MultinetMatch = Match{
+	ofp14.OFPT_PACKET_IN,
+	ofp14.OFPT_FLOW_MOD,
+	MultinetPktInCheck,
+	MultinetFlowModCheck}
 
 // MultinetCheckIn attempts to extract the pattern from a PACKET_IN message that
 // will be used to match it with a subsequent FLOW_MOD. The pattern in
 // our case is the concatenation of <dstMac><srcMac> fields, which is returned
 // if it is found within the PACKET_IN data, otherwise nil is returned.
-func MultinetPktInCheck(ofPkt []byte) []byte {
-	var pattern []byte
+func MultinetPktInCheck(ofPkt []byte, ip net.IP, port uint16) []byte {
+	var pattern, r []byte
 	var from, to int
 
 	from = ofp14.PKTIN_OFPMATCH_OFFSET + ofp14.OFPMATCH_LENGTH_OFFSET
@@ -24,15 +31,23 @@ func MultinetPktInCheck(ofPkt []byte) []byte {
 	from = ofp14.ETHER_ETHERTYPE_OFFSET
 	to = ofp14.ETHER_DATA_OFFSET
 	etherType := int(binary.BigEndian.Uint16(data[from:to]))
+	// ARP
 	if etherType == 0x0806 {
-		//dstMac := data[0:6]
-		//srcMac := data[6:12]
+		//dstMac: data[0:6], srcMac: data[6:12]
 		from = ofp14.ETHER_DSTMAC_OFFSET
 		to = ofp14.ETHER_ETHERTYPE_OFFSET
 		pattern = data[from:to]
-		//log.Printf("PACKET_IN pattern: % x", pattern)
 	}
-	return pattern
+	if pattern == nil {
+		r = nil
+	} else {
+		b := make([]byte, 2)
+		binary.BigEndian.PutUint16(b, port)
+		r = append(pattern, ip...)
+		r = append(r, b...)
+	}
+
+	return r
 }
 
 // MultinetCheckOut attempts to extract the pattern from a FLOW_MOD message that will
@@ -40,7 +55,7 @@ func MultinetPktInCheck(ofPkt []byte) []byte {
 // the concatenation of <OFPXMT_OFB_ETH_DST><OFPXMT_OFB_ETH_SRC> value fields
 // in OXM segments, which is returned if it is found within the PACKET_IN data,
 // otherwise nil is returned.
-func MultinetFlowModCheck(ofPkt []byte) []byte {
+func MultinetFlowModCheck(ofPkt []byte, ip net.IP, port uint16) []byte {
 	var matchDstMac, matchSrcMac []byte
 	var from, to int
 	from = ofp14.FLOWMOD_MATCH_OXM0_OFFSET
@@ -72,7 +87,12 @@ func MultinetFlowModCheck(ofPkt []byte) []byte {
 			matchDstMac = ofPkt[oxm1ValFrom:oxm1ValTo]
 
 		}
-		return append(matchDstMac, matchSrcMac...)
+		b := make([]byte, 2)
+		binary.BigEndian.PutUint16(b, port)
+		pattern := append(matchDstMac, matchSrcMac...)
+		pattern = append(pattern, ip...)
+		pattern = append(pattern, b...)
+		return pattern
 	}
 	return nil
 }

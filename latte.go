@@ -28,6 +28,8 @@ var ofport = flag.String("ofport", "6653",
 	"OpenFlow port number")
 var sniffer = flag.String("sniffer", "pcap",
 	"Library to use for packet sniffing: pcap or pfring")
+var match = flag.String("match", "multinet",
+	"Traffic scenario to consider for matching")
 
 var (
 	snapshotLen int32 = 1024
@@ -37,9 +39,7 @@ var (
 	handle      *pcap.Handle
 	packetsIn   map[uint32]int64
 	lostPackets int64
-
-	// OF packets with valid OF version and OF type fields
-	packetIn, flowMod uint64
+	m           matching.Match
 )
 
 func main() {
@@ -50,6 +50,7 @@ func main() {
 	fmt.Println("cpuprofile: ", *cpuprofile)
 	fmt.Println("ofport: ", *ofport)
 	fmt.Println("sniffer: ", *sniffer)
+	fmt.Println("match: ", *match)
 
 	var f *os.File
 	if *cpuprofile != "" {
@@ -71,8 +72,6 @@ func main() {
 		if *cpuprofile != "" {
 			pprof.StopCPUProfile()
 		}
-		fmt.Println("PACKET_INs: ", packetIn)
-		fmt.Println("FLOW_MODs: ", flowMod)
 		os.Exit(0)
 	}()
 
@@ -108,6 +107,10 @@ func main() {
 
 	}
 
+	if *match == "multinet" {
+		m = matching.MultinetMatch
+	}
+
 	// Layers for decoding
 	var (
 		eth     layers.Ethernet
@@ -136,9 +139,6 @@ Sniffing:
 		for _, layerType := range decoded {
 			switch layerType {
 			case layers.LayerTypeTCP:
-				//src := uint32(tcp.SrcPort)
-				//dst := uint32(tcp.DstPort)
-
 				tcppaylen := len(tcp.Payload)
 
 				// TCP segment with possible OF packets
@@ -172,15 +172,13 @@ Sniffing:
 							//ofpxid := binary.BigEndian.Uint32(ofPkt[4:8])
 
 							switch ofptype {
-							case ofp14.OFPT_PACKET_IN:
-								packetIn += 1
-								pattern := matching.MultinetPktInCheck(ofPkt)
+							case m.InMsg:
+								pattern := m.InMatch(ofPkt, ip.SrcIP, uint16(tcp.SrcPort))
 								if pattern != nil {
 									// record it
 								}
-							case ofp14.OFPT_FLOW_MOD:
-								flowMod += 1
-								pattern := matching.MultinetFlowModCheck(ofPkt)
+							case m.OutMsg:
+								pattern := m.OutMatch(ofPkt, ip.DstIP, uint16(tcp.DstPort))
 								if pattern != nil {
 									// match it
 								}
