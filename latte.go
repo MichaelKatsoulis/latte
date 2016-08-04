@@ -32,14 +32,15 @@ var match = flag.String("match", "multinet",
 	"Traffic scenario to consider for matching")
 
 var (
-	snapshotLen int32 = 1024
-	promiscuous bool  = false
-	err         error
-	timeout     time.Duration = 30 * time.Second
-	handle      *pcap.Handle
-	packetsIn   map[uint32]int64
-	lostPackets int64
-	m           matching.Match
+	snapshotLen  int32 = 1024
+	promiscuous  bool  = false
+	err          error
+	timeout      time.Duration = 30 * time.Second
+	handle       *pcap.Handle
+	checkedIn    map[string]int64
+	packetsLost  int64
+	unmatchedOut int64
+	m            matching.Match
 )
 
 func main() {
@@ -75,7 +76,7 @@ func main() {
 		os.Exit(0)
 	}()
 
-	packetsIn = make(map[uint32]int64)
+	checkedIn = make(map[string]int64)
 
 	// Set filter
 	filter := "tcp and port " + *ofport
@@ -172,40 +173,44 @@ Sniffing:
 							//ofpxid := binary.BigEndian.Uint32(ofPkt[4:8])
 
 							switch ofptype {
-							case m.InMsg:
+							case m.InMsgType:
 								pattern := m.InMatch(ofPkt, ip.SrcIP, uint16(tcp.SrcPort))
 								if pattern != nil {
-									// record it
+									s := string(pattern)
+									log.Printf("<- %x\n", pattern)
+									_, exists := checkedIn[s]
+
+									// The pattern already exists in checkedIn map,
+									// this is a packet loss case
+									if exists {
+										packetsLost += 1
+									}
+									checkedIn[s] = time.Now().UnixNano()
 								}
-							case m.OutMsg:
+							case m.OutMsgType:
 								pattern := m.OutMatch(ofPkt, ip.DstIP, uint16(tcp.DstPort))
 								if pattern != nil {
-									// match it
+									s := string(pattern)
+									log.Printf("-> % x\n", pattern)
+									val, exists := checkedIn[s]
+									if exists {
+										latency := time.Now().UnixNano() - val
+										h.Add(float64(latency / 1000000.0))
+									} else {
+										// unmatched replies... normal?
+										unmatchedOut += 1
+									}
 								}
-
 							} // end of switch ofptype
 						} else {
 							// stop walking the rest TCP segment
 							log.Printf("Unknown OF version (%d) or OF type\n", ofpver)
 							continue Sniffing
 						}
-
 						i = ofpend
 					}
-
 				}
-
-				/*
-					if dst == ofp {
-						packetsIn[src] = time.Now().UnixNano()
-					}
-
-					if src == ofp {
-						latency := time.Now().UnixNano() - packetsIn[dst]
-						h.Add(float64(latency / 1000000.0))
-					}*/
 			}
-
 		}
 	}
 }

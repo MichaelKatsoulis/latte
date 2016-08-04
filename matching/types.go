@@ -2,9 +2,14 @@ package matching
 
 import "net"
 
+// Match encapsulates matching information for a certain use case
+// - InMsgType: matchable incoming OF message type
+// - OutMsgType: matchable outgoing OF message type
+// - InMatch: function to extract pattern from matchable incoming msgs
+// - OutMatch: function to extract pattern from matchable outgoing msgs
 type Match struct {
-	InMsg    uint8
-	OutMsg   uint8
-	InMatch  func([]byte, net.IP, uint16) []byte
-	OutMatch func([]byte, net.IP, uint16) []byte
+	InMsgType  uint8
+	OutMsgType uint8
+	InMatch    func([]byte, net.IP, uint16) []byte
+	OutMatch   func([]byte, net.IP, uint16) []byte
 }
