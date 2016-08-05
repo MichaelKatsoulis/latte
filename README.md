@@ -1,7 +1,12 @@
 [![Build Status](https://travis-ci.org/anastop/latte.svg?branch=master)](https://travis-ci.org/anastop/latte)
 
 # latte
-SDN controller latency measuring tool 
+`latte` is a simple network probe written in Go that measures the response 
+latency of an SDN controller for certain types of request/response message
+pairs. Currently, the following pairs are supported:
+
+- PACKET_IN requests and FLOW_MOD replies generated using [Multinet](https://github.com/intracom-telecom-sdn/multinet#generate-packet_in-events-with-arp-payload)
+
 
 __NOTE__: under development
 

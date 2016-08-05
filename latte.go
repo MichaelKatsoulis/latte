@@ -39,7 +39,7 @@ var (
 	handle       *pcap.Handle
 	checkedIn    map[string]int64
 	packetsLost  int64
-	unmatchedOut int64
+	orphanRes 	 int64
 	m            matching.Match
 )
 
@@ -70,6 +70,8 @@ func main() {
 		sig := <-sigs
 		fmt.Println(sig)
 		fmt.Println(h)
+		fmt.Println("Lost packets: %d\n", packetsLost)
+		fmt.Println("Orphan responses: %d\n", orphanRes)
 		if *cpuprofile != "" {
 			pprof.StopCPUProfile()
 		}
@@ -150,12 +152,11 @@ Sniffing:
 					i := 0
 
 					// Walk the TCP payload and extract possible OF packets (1 or more)
-					for i < tcppaylen {
+					for i < tcppaylen-8 {
 						ofplen := binary.BigEndian.Uint16(tcp.Payload[i+2 : i+4])
 						ofpend := i + int(ofplen)
 						if ofpend > int(tcppaylen) {
-							log.Printf("OF packet ends beyond the TCP payload (%d, %d)."+
-								"Ignoring packet...", ofpend, tcppaylen)
+							// OF packet ends beyond the TCP payload. Ignore it
 							continue Sniffing
 						}
 
@@ -177,7 +178,7 @@ Sniffing:
 								pattern := m.InMatch(ofPkt, ip.SrcIP, uint16(tcp.SrcPort))
 								if pattern != nil {
 									s := string(pattern)
-									log.Printf("<- %x\n", pattern)
+									log.Printf("<- % x\n", pattern)
 									_, exists := checkedIn[s]
 
 									// The pattern already exists in checkedIn map,
@@ -194,17 +195,17 @@ Sniffing:
 									log.Printf("-> % x\n", pattern)
 									val, exists := checkedIn[s]
 									if exists {
+										log.Printf("MATCH!!\n")
 										latency := time.Now().UnixNano() - val
 										h.Add(float64(latency / 1000000.0))
 									} else {
 										// unmatched replies... normal?
-										unmatchedOut += 1
+										orphanRes += 1
 									}
 								}
 							} // end of switch ofptype
 						} else {
-							// stop walking the rest TCP segment
-							log.Printf("Unknown OF version (%d) or OF type\n", ofpver)
+							// Unknown OF version or type. Stop walking the rest TCP segment
 							continue Sniffing
 						}
 						i = ofpend
