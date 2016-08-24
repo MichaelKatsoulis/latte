@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/anastop/latte.svg?branch=master)](https://travis-ci.org/anastop/latte)
+[![Go Report Card](https://goreportcard.com/badge/github.com/anastop/latte)](https://goreportcard.com/report/github.com/anastop/latte)
 
 # latte
 `latte` is a simple network probe written in Go that measures the response 
