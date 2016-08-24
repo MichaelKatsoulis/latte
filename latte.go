@@ -32,15 +32,15 @@ var match = flag.String("match", "multinet",
 	"Traffic scenario to consider for matching")
 
 var (
-	snapshotLen  int32 = 1024
-	promiscuous  bool  = false
-	err          error
-	timeout      time.Duration = 30 * time.Second
-	handle       *pcap.Handle
-	checkedIn    map[string]int64
-	packetsLost  int64
-	orphanRes 	 int64
-	m            matching.Match
+	snapshotLen int32 = 1024
+	promiscuous bool  = false
+	err         error
+	timeout     time.Duration = 30 * time.Second
+	handle      *pcap.Handle
+	checkedIn   map[string]int64
+	packetsLost int64
+	orphanRes   int64
+	m           matching.Match
 )
 
 func main() {
@@ -53,8 +53,8 @@ func main() {
 	fmt.Println("sniffer: ", *sniffer)
 	fmt.Println("match: ", *match)
 
-	var f *os.File
 	if *cpuprofile != "" {
+		var f *os.File
 		f, err = os.Create(*cpuprofile)
 		if err != nil {
 			log.Fatal(err)
@@ -178,7 +178,7 @@ Sniffing:
 								pattern := m.InMatch(ofPkt, ip.SrcIP, uint16(tcp.SrcPort))
 								if pattern != nil {
 									s := string(pattern)
-									log.Printf("<- % x\n", pattern)
+									log.Printf("C <- % x\n", pattern)
 									_, exists := checkedIn[s]
 
 									// The pattern already exists in checkedIn map,
@@ -192,12 +192,13 @@ Sniffing:
 								pattern := m.OutMatch(ofPkt, ip.DstIP, uint16(tcp.DstPort))
 								if pattern != nil {
 									s := string(pattern)
-									log.Printf("-> % x\n", pattern)
+									log.Printf("C -> % x\n", pattern)
 									val, exists := checkedIn[s]
 									if exists {
 										log.Printf("MATCH!!\n")
 										latency := time.Now().UnixNano() - val
 										h.Add(float64(latency / 1000000.0))
+										checkedIn[s] = 0
 									} else {
 										// unmatched replies... normal?
 										orphanRes += 1

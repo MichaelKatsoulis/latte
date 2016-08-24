@@ -87,12 +87,14 @@ func MultinetFlowModCheck(ofPkt []byte, ip net.IP, port uint16) []byte {
 			matchDstMac = ofPkt[oxm1ValFrom:oxm1ValTo]
 
 		}
-		b := make([]byte, 2)
-		binary.BigEndian.PutUint16(b, port)
-		pattern := append(matchDstMac, matchSrcMac...)
-		pattern = append(pattern, ip...)
-		pattern = append(pattern, b...)
-		return pattern
+		if matchSrcMac != nil && matchDstMac != nil {
+			b := make([]byte, 2)
+			binary.BigEndian.PutUint16(b, port)
+			pattern := append(matchDstMac, matchSrcMac...)
+			pattern = append(pattern, ip...)
+			pattern = append(pattern, b...)
+			return pattern
+		}
 	}
 	return nil
 }
