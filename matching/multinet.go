@@ -12,10 +12,21 @@ var MultinetMatch = Match{
 	MultinetPktInCheck,
 	MultinetFlowModCheck}
 
-// MultinetCheckIn attempts to extract the pattern from a PACKET_IN message that
-// will be used to match it with a subsequent FLOW_MOD. The pattern in
-// our case is the concatenation of <dstMac><srcMac> fields, which is returned
-// if it is found within the PACKET_IN data, otherwise nil is returned.
+// MultinetPktInCheck attempts to extract the pattern from a PACKET_IN message
+// sent via Multinet's traffic generation logic, that will be used to match it
+// against a subsequent FLOW_MOD.
+//
+// Conditions for the packet to be eligible for check-in:
+// - OFP_PACKET_IN message type
+// - containing an Ethernet frame with ARP payload
+//
+// The extracted pattern is a concatenation of:
+// - Ethernet frame dst mac
+// - Ethernet frame src mac
+// - Sender (OF switch) IP (given as argument)
+// - Sender (OF switch) port (given as argument)
+//
+// If the pattern is found it is returned. Otherwise nil is returned.
 func MultinetPktInCheck(ofPkt []byte, ip net.IP, port uint16) []byte {
 	var pattern, r []byte
 	var from, to int
@@ -28,6 +39,7 @@ func MultinetPktInCheck(ofPkt []byte, ip net.IP, port uint16) []byte {
 	// compute data index
 	di := ofp14.PKTIN_OFPMATCH_OFFSET + matchlen + ofp14.PKTIN_PAD_BYTES
 	data := ofPkt[di:]
+	// extract data ethertype
 	from = ofp14.ETHER_ETHERTYPE_OFFSET
 	to = ofp14.ETHER_DATA_OFFSET
 	etherType := int(binary.BigEndian.Uint16(data[from:to]))
@@ -50,11 +62,22 @@ func MultinetPktInCheck(ofPkt []byte, ip net.IP, port uint16) []byte {
 	return r
 }
 
-// MultinetCheckOut attempts to extract the pattern from a FLOW_MOD message that will
-// be used to match it with a previous PACKET_IN. The pattern in our case is
-// the concatenation of <OFPXMT_OFB_ETH_DST><OFPXMT_OFB_ETH_SRC> value fields
-// in OXM segments, which is returned if it is found within the PACKET_IN data,
-// otherwise nil is returned.
+// MultinetFlowModCheck attempts to extract a pattern from a FLOW_MOD message
+// in order to match it against checked-in PACKET_INs, generated through
+// Multinet.
+//
+// Conditions for the packet to be eligible for checking against a checked-in
+// message:
+// - OFP_FLOW_MOD message type
+// - First OXM should have a class equal to OFPXMC_OPENFLOW_BASIC
+// - The match fields of the two OXMs should be equal to OFPXMT_OFB_ETH_DST,
+//   OFPXMT_OFB_ETH_SRC
+//
+// The extracted pattern is a concatenation of:
+// - Value of match field OFPXMT_OFB_ETH_DST
+// - Value of match field OFPXMT_OFB_ETH_SRC
+// - Receiver (OF switch) IP (given as argument)
+// - Receiver (OF switch) port (given as argument)
 func MultinetFlowModCheck(ofPkt []byte, ip net.IP, port uint16) []byte {
 	var matchDstMac, matchSrcMac []byte
 	var from, to int
