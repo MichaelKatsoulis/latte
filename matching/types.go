@@ -2,7 +2,7 @@ package matching
 
 import "net"
 
-// Match encapsulates matching information for a certain use case
+// Match encapsulates packet matching information for a certain use case
 // - InMsgType: matchable incoming OF message type
 // - OutMsgType: matchable outgoing OF message type
 // - InMatch: function to extract pattern from matchable incoming msgs
