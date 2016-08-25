@@ -8,53 +8,63 @@ package ofp14
 
 const (
 	// Immutable messages (symmetric)
+
 	OFPT_HELLO        = 0
 	OFPT_ERROR        = 1
 	OFPT_ECHO_REQUEST = 2
 	OFPT_ECHO_REPLY   = 3
 	OFPT_EXPERIMENTER = 4
 
-	/* Switch configuration messages */
+	// Switch configuration messages
+
 	OFPT_FEATURES_REQUEST   = 5
 	OFPT_FEATURES_REPLY     = 6
 	OFPT_GET_CONFIG_REQUEST = 7
 	OFPT_GET_CONFIG_REPLY   = 8
 	OFPT_SET_CONFIG         = 9
 
-	/* Asynchronous messages */
+	// Asynchronous messages
+
 	OFPT_PACKET_IN    = 10
 	OFPT_FLOW_REMOVED = 11
 	OFPT_PORT_STATUS  = 12
 
-	/* Controller command messages */
+	// Controller command messages
+
 	OFPT_PACKET_OUT = 13
 	OFPT_FLOW_MOD   = 14
 	OFPT_GROUP_MOD  = 15
 	OFPT_PORT_MOD   = 16
 	OFPT_TABLE_MOD  = 17
 
-	/* Multipart messages */
+	// Multipart messages
+
 	OFPT_MULTIPART_REQUEST = 18
 	OFPT_MULTIPART_REPLY   = 19
 
-	/* Barrier messages. */
+	// Barrier messages
+
 	OFPT_BARRIER_REQUEST = 20
 	OFPT_BARRIER_REPLY   = 21
 
-	/* Queue Configuration messages */
+	// Queue Configuration messages
+
 	OFPT_QUEUE_GET_CONFIG_REQUEST = 22
 	OFPT_QUEUE_GET_CONFIG_REPLY   = 23
 
-	/* Controller role change request messages */
+	// Controller role change request messages
+
 	OFPT_ROLE_REQUEST = 24
 	OFPT_ROLE_REPLY   = 25
 
-	/* Asynchronous message configuration */
+	// Asynchronous message configuration
+
 	OFPT_GET_ASYNC_REQUEST = 26
 	OFPT_GET_ASYNC_REPLY   = 27
 	OFPT_SET_ASYNC         = 28
 
-	/* Meters and rate limiters configuration messages */
+	// Meters and rate limiters configuration messages
+
 	OFPT_METER_MOD = 29
 	OFPT_MAX_TYPE  = 29
 
@@ -165,7 +175,9 @@ const (
 	OXM_VALUE_OFFSET  = 4
 
 	FLOWMOD_MATCH_OFFSET = 48 // offset of 'match' field within a FLOWMOD
+
 	// OXM0: the first OXM TLV
+
 	FLOWMOD_MATCH_OXM0_OFFSET = 52
 
 	OFPXMC_OPENFLOW_BASIC = 0x8000

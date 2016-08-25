@@ -6,6 +6,8 @@ import (
 	"net"
 )
 
+// MultinetMatch contains matching information for traffic generated
+// with Multinet's logic
 var MultinetMatch = Match{
 	ofp14.OFPT_PACKET_IN,
 	ofp14.OFPT_FLOW_MOD,

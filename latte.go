@@ -70,8 +70,8 @@ func main() {
 		sig := <-sigs
 		fmt.Println(sig)
 		fmt.Println(h)
-		fmt.Println("Lost packets: %d\n", packetsLost)
-		fmt.Println("Orphan responses: %d\n", orphanRes)
+		fmt.Printf("Lost packets: %d\n", packetsLost)
+		fmt.Printf("Orphan responses: %d\n", orphanRes)
 		if *cpuprofile != "" {
 			pprof.StopCPUProfile()
 		}
