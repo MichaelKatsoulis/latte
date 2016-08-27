@@ -70,6 +70,8 @@ func main() {
 		sig := <-sigs
 		fmt.Println(sig)
 		fmt.Println(h)
+		fmt.Println("Mean: %d\n", h.Mean())
+		fmt.Println("99th percentile: %d\n", h.Quantile(float64(0.99)))
 		fmt.Printf("Lost packets: %d\n", packetsLost)
 		fmt.Printf("Orphan responses: %d\n", orphanRes)
 		if *cpuprofile != "" {
