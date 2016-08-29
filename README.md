@@ -21,7 +21,9 @@ Currently, the following request/response pairs are supported:
 
 
 ## Usage
-  1. Install Go and init your `GOPATH` env variable, 
+  1. Install Go 
+  2. Install libpcap development library (`yum install libpcap-devel` or `apt-get install libpcap-dev`)
+  3. Init your `GOPATH` env variable, 
   e.g. 
   ```bash
   export GOPATH=$HOME/gocode/
@@ -45,7 +47,7 @@ Currently, the following request/response pairs are supported:
   For a quick test, replay the `multinet_1w_traffic` pcap file located under `resources` folder.  
   This is a capture from real traffic generated using Multinet (1 worker) and the OpenDaylight controller. 
 
-  In another shell, invoke the `tcpreplay` utility as follows:
+  To do this, invoke in another shell the `tcpreplay` utility as follows:
   ```bash
   sudo tcpreplay -i lo multinet_1w_traffic.pcap
   ```
