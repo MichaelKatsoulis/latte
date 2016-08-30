@@ -11,6 +11,7 @@ import (
 	"github.com/google/gopacket/pcap"
 	//"github.com/google/gopacket/pfring"
 	"encoding/binary"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
@@ -30,6 +31,7 @@ var sniffer = flag.String("sniffer", "pcap",
 	"Library to use for packet sniffing: pcap or pfring")
 var match = flag.String("match", "multinet",
 	"Traffic scenario to consider for matching")
+var dolog = flag.Bool("log", false, "Enable logging")
 
 var (
 	snapshotLen int32 = 1024
@@ -52,6 +54,12 @@ func main() {
 	fmt.Println("ofport: ", *ofport)
 	fmt.Println("sniffer: ", *sniffer)
 	fmt.Println("match: ", *match)
+	fmt.Println("log: ", *dolog)
+
+	if !*dolog {
+		log.SetFlags(0)
+		log.SetOutput(ioutil.Discard)
+	}
 
 	if *cpuprofile != "" {
 		var f *os.File
@@ -70,8 +78,10 @@ func main() {
 		sig := <-sigs
 		fmt.Println(sig)
 		fmt.Println(h)
-		fmt.Println("Mean: %d\n", h.Mean())
-		fmt.Println("99th percentile: %d\n", h.Quantile(float64(0.99)))
+		fmt.Printf("Count: %f\n", h.Count())
+		fmt.Printf("Mean: %f\n", h.Mean())
+		fmt.Printf("99th percentile: %f\n", h.Quantile(float64(0.99)))
+		fmt.Printf("95th percentile: %f\n", h.Quantile(float64(0.95)))
 		fmt.Printf("Lost packets: %d\n", packetsLost)
 		fmt.Printf("Orphan responses: %d\n", orphanRes)
 		if *cpuprofile != "" {
