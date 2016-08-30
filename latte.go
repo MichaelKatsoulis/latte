@@ -34,15 +34,16 @@ var match = flag.String("match", "multinet",
 var dolog = flag.Bool("log", false, "Enable logging")
 
 var (
-	snapshotLen int32 = 1024
-	promiscuous bool  = false
-	err         error
-	timeout     time.Duration = 30 * time.Second
-	handle      *pcap.Handle
-	checkedIn   map[string]int64
-	packetsLost int64
-	orphanRes   int64
-	m           matching.Match
+	snapshotLen     int32 = 1024
+	promiscuous     bool  = false
+	err             error
+	timeout         time.Duration = 30 * time.Second
+	handle          *pcap.Handle
+	checkedIn       map[string]int64
+	packetsLost     int64
+	orphanRes       int64
+	m               matching.Matcher
+	intype, outtype uint8
 )
 
 func main() {
@@ -123,8 +124,10 @@ func main() {
 	}
 
 	if *match == "multinet" {
-		m = matching.MultinetMatch
+		m = matching.MultinetTraffic{}
 	}
+	intype = m.InMsg()
+	outtype = m.OutMsg()
 
 	// Layers for decoding
 	var (
@@ -186,8 +189,8 @@ Sniffing:
 							//ofpxid := binary.BigEndian.Uint32(ofPkt[4:8])
 
 							switch ofptype {
-							case m.InMsgType:
-								pattern := m.InMatch(ofPkt, ip.SrcIP, uint16(tcp.SrcPort))
+							case intype:
+								pattern := m.CheckIn(ofPkt, ip.SrcIP, uint16(tcp.SrcPort))
 								if pattern != nil {
 									s := string(pattern)
 									log.Printf("C <- % x\n", pattern)
@@ -200,8 +203,8 @@ Sniffing:
 									}
 									checkedIn[s] = time.Now().UnixNano()
 								}
-							case m.OutMsgType:
-								pattern := m.OutMatch(ofPkt, ip.DstIP, uint16(tcp.DstPort))
+							case outtype:
+								pattern := m.CheckOut(ofPkt, ip.DstIP, uint16(tcp.DstPort))
 								if pattern != nil {
 									s := string(pattern)
 									log.Printf("C -> % x\n", pattern)
