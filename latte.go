@@ -57,7 +57,7 @@ func main() {
 	fmt.Println("sniffer: ", *sniffer)
 	fmt.Println("match: ", *match)
 	fmt.Println("log: ", *dolog)
-	fmt.Println("late threshold:", *lateThreshold)
+	fmt.Println("late threshold (msec): ", *lateThreshold)
 
 	if !*dolog {
 		log.SetFlags(0)
@@ -82,12 +82,13 @@ func main() {
 		fmt.Println(sig)
 		fmt.Println("Latency histogram (msec)")
 		fmt.Println(h)
-		fmt.Printf("Sample count: %f\n", h.Count())
+		nsamples := h.Count()
+		fmt.Printf("Sample count: %.0f\n", nsamples)
 		fmt.Printf("Mean latency (msec): %f\n", h.Mean())
 		fmt.Printf("99th percentile (msec): %f\n", h.Quantile(float64(0.99)))
 		fmt.Printf("95th percentile (msec): %f\n", h.Quantile(float64(0.95)))
-		fmt.Printf("Lost packets: %d\n", lost)
-		fmt.Printf("Late packets: %d\n", late)
+		fmt.Printf("Lost packets: %d (%.1f%%)\n", lost, float64(lost)*100.0/nsamples)
+		fmt.Printf("Late packets: %d (%.1f%%)\n", late, float64(late)*100.0/nsamples)
 		fmt.Printf("Orphan responses: %d\n", orphan)
 		if *cpuprofile != "" {
 			pprof.StopCPUProfile()
