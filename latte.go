@@ -32,18 +32,19 @@ var sniffer = flag.String("sniffer", "pcap",
 var match = flag.String("match", "multinet",
 	"Traffic scenario to consider for matching")
 var dolog = flag.Bool("log", false, "Enable logging")
+var lateThreshold = flag.Float64("late-threshold", 10000.0,
+	"Latency threshold in msec above which a late response is considered as a lost one")
 
 var (
-	snapshotLen     int32 = 1024
-	promiscuous     bool  = false
-	err             error
-	timeout         time.Duration = 30 * time.Second
-	handle          *pcap.Handle
-	checkedIn       map[string]int64
-	packetsLost     int64
-	orphanRes       int64
-	m               matching.Matcher
-	intype, outtype uint8
+	snapshotLen        int32 = 1024
+	promiscuous        bool  = false
+	err                error
+	timeout            time.Duration = 30 * time.Second
+	handle             *pcap.Handle
+	checkedIn          map[string]int64
+	lost, late, orphan int64
+	m                  matching.Matcher
+	intype, outtype    uint8
 )
 
 func main() {
@@ -56,6 +57,7 @@ func main() {
 	fmt.Println("sniffer: ", *sniffer)
 	fmt.Println("match: ", *match)
 	fmt.Println("log: ", *dolog)
+	fmt.Println("late threshold:", *lateThreshold)
 
 	if !*dolog {
 		log.SetFlags(0)
@@ -78,13 +80,15 @@ func main() {
 	go func() {
 		sig := <-sigs
 		fmt.Println(sig)
+		fmt.Println("Latency histogram (msec)")
 		fmt.Println(h)
-		fmt.Printf("Count: %f\n", h.Count())
-		fmt.Printf("Mean: %f\n", h.Mean())
-		fmt.Printf("99th percentile: %f\n", h.Quantile(float64(0.99)))
-		fmt.Printf("95th percentile: %f\n", h.Quantile(float64(0.95)))
-		fmt.Printf("Lost packets: %d\n", packetsLost)
-		fmt.Printf("Orphan responses: %d\n", orphanRes)
+		fmt.Printf("Sample count: %f\n", h.Count())
+		fmt.Printf("Mean latency (msec): %f\n", h.Mean())
+		fmt.Printf("99th percentile (msec): %f\n", h.Quantile(float64(0.99)))
+		fmt.Printf("95th percentile (msec): %f\n", h.Quantile(float64(0.95)))
+		fmt.Printf("Lost packets: %d\n", lost)
+		fmt.Printf("Late packets: %d\n", late)
+		fmt.Printf("Orphan responses: %d\n", orphan)
 		if *cpuprofile != "" {
 			pprof.StopCPUProfile()
 		}
@@ -199,7 +203,7 @@ Sniffing:
 									// The pattern already exists in checkedIn map,
 									// this is a packet loss case
 									if exists {
-										packetsLost += 1
+										lost += 1
 									}
 									checkedIn[s] = time.Now().UnixNano()
 								}
@@ -211,12 +215,15 @@ Sniffing:
 									val, exists := checkedIn[s]
 									if exists {
 										log.Printf("MATCH!!\n")
-										latency := time.Now().UnixNano() - val
-										h.Add(float64(latency / 1000000.0))
+										latency := float64((time.Now().UnixNano() - val) / 1000000.0)
+										if latency > *lateThreshold {
+											late += 1
+										}
+										h.Add(latency)
 										checkedIn[s] = 0
 									} else {
 										// unmatched replies... normal?
-										orphanRes += 1
+										orphan += 1
 									}
 								}
 							} // end of switch ofptype
