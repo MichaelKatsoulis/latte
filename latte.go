@@ -21,43 +21,83 @@ import (
 	"time"
 )
 
-var device = flag.String("device", "lo",
-	"device to sniff packets from")
-var cpuprofile = flag.String("cpuprofile", "",
-	"enable CPU prof and write results to file")
-var ofport = flag.String("ofport", "6653",
-	"OpenFlow port number")
-var sniffer = flag.String("sniffer", "pcap",
-	"Library to use for packet sniffing: pcap or pfring")
-var match = flag.String("match", "multinet",
-	"Traffic scenario to consider for matching")
-var dolog = flag.Bool("log", false, "Enable logging")
-var lateThreshold = flag.Float64("late-threshold", 10000.0,
-	"Latency threshold in msec above which a late response is considered as a lost one")
+// Stats collects statistics-related info about a run
+type Stats struct {
+	h                        *gohistogram.NumericHistogram
+	ofcount                  int64
+	incount, inreg           int64
+	outcount, outreg, outmat int64
+	lost, late, orphan       int64
+}
 
-var (
-	snapshotLen        int32 = 1024
-	promiscuous        bool  = false
-	err                error
-	timeout            time.Duration = 30 * time.Second
-	handle             *pcap.Handle
-	checkedIn          map[string]int64
-	lost, late, orphan int64
-	m                  matching.Matcher
-	intype, outtype    uint8
-)
+// report prints statistic results when finished
+func report(c chan os.Signal, reg map[string]int64, st *Stats, cpuprofile *string) {
+	sig := <-c
+	fmt.Println(sig)
+	for _, v := range reg {
+		if v > 0 {
+			st.lost += 1
+		}
+	}
+
+	fmt.Println("Latency histogram (msec)")
+	fmt.Println(st.h)
+	fmt.Printf("Inmsg total: %d\n", st.incount)
+	fmt.Printf("Inmsg registered: %d\n", st.inreg)
+	fmt.Printf("Inmsg unreplied: %d (%.1f%%)\n",
+		st.lost, float64(st.lost)*100.0/float64(st.inreg))
+	fmt.Printf("Outmsg total: %d\n", st.outcount)
+	fmt.Printf("Outmsg registered: %d\n", st.outreg)
+	fmt.Printf("Outmsg matched: %d\n", st.outmat)
+	fmt.Printf("Outmsg late: %d (%.1f%%)\n",
+		st.late, float64(st.late)*100.0/float64(st.outmat))
+	fmt.Printf("Outmsg orphan: %d\n", st.orphan)
+	fmt.Printf("Mean latency (msec): %f\n", st.h.Mean())
+	fmt.Printf("99th percentile (msec): %f\n", st.h.Quantile(float64(0.99)))
+	fmt.Printf("95th percentile (msec): %f\n", st.h.Quantile(float64(0.95)))
+	if *cpuprofile != "" {
+		pprof.StopCPUProfile()
+	}
+	os.Exit(0)
+}
 
 func main() {
-	flag.Parse()
-	_, err := strconv.ParseUint(*ofport, 10, 32)
+	var err error
 
+	// cmd line options
+	var (
+		device = flag.String("device", "lo",
+			"device to sniff packets from")
+		cpuprofile = flag.String("cpuprofile", "",
+			"enable CPU prof and write results to file")
+		ofport  = flag.String("ofport", "6653", "OpenFlow port number")
+		sniffer = flag.String("sniffer", "pcap",
+			"Library to use for packet sniffing: pcap or pfring")
+		matcher = flag.String("matcher", "multinet",
+			"Traffic scenario to consider for matching")
+		dolog = flag.Bool("log", false,
+			"Enable logging")
+		lateThres = flag.Float64("late-threshold", 2000.0,
+			"Threshold (msec) above which a late response is considered lost")
+	)
+
+	// Packet matching
+	var (
+		reg             map[string]int64
+		m               matching.Matcher
+		intype, outtype uint8
+	)
+
+	flag.Parse()
 	fmt.Println("device: ", *device)
 	fmt.Println("cpuprofile: ", *cpuprofile)
 	fmt.Println("ofport: ", *ofport)
 	fmt.Println("sniffer: ", *sniffer)
-	fmt.Println("match: ", *match)
+	fmt.Println("matcher: ", *matcher)
 	fmt.Println("log: ", *dolog)
-	fmt.Println("late threshold (msec): ", *lateThreshold)
+	fmt.Println("late threshold (msec): ", *lateThres)
+
+	_, err = strconv.ParseUint(*ofport, 10, 32)
 
 	if !*dolog {
 		log.SetFlags(0)
@@ -72,39 +112,25 @@ func main() {
 		}
 		pprof.StartCPUProfile(f)
 	}
-	h := gohistogram.NewHistogram(20)
 
-	sigs := make(chan os.Signal, 1)
-
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		sig := <-sigs
-		fmt.Println(sig)
-		fmt.Println("Latency histogram (msec)")
-		fmt.Println(h)
-		nsamples := h.Count()
-		fmt.Printf("Sample count: %.0f\n", nsamples)
-		fmt.Printf("Mean latency (msec): %f\n", h.Mean())
-		fmt.Printf("99th percentile (msec): %f\n", h.Quantile(float64(0.99)))
-		fmt.Printf("95th percentile (msec): %f\n", h.Quantile(float64(0.95)))
-		fmt.Printf("Lost packets: %d (%.1f%%)\n", lost, float64(lost)*100.0/nsamples)
-		fmt.Printf("Late packets: %d (%.1f%%)\n", late, float64(late)*100.0/nsamples)
-		fmt.Printf("Orphan responses: %d\n", orphan)
-		if *cpuprofile != "" {
-			pprof.StopCPUProfile()
-		}
-		os.Exit(0)
-	}()
-
-	checkedIn = make(map[string]int64)
+	reg = make(map[string]int64)
+	st := Stats{}
+	st.h = gohistogram.NewHistogram(40)
 
 	// Set filter
 	filter := "tcp and port " + *ofport
 	fmt.Printf("BPF filter: %s\n", filter)
 
 	// Open device
-	var packetSource *gopacket.PacketSource
+	var pktSrc *gopacket.PacketSource
 	if *sniffer == "pcap" {
+		var (
+			snapshotLen int32         = 1024
+			promiscuous bool          = false
+			timeout     time.Duration = 30 * time.Second
+			handle      *pcap.Handle
+		)
+
 		handle, err = pcap.OpenLive(*device, snapshotLen, promiscuous, timeout)
 		if err != nil {
 			log.Fatal(err)
@@ -115,7 +141,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		packetSource = gopacket.NewPacketSource(handle, handle.LinkType())
+		pktSrc = gopacket.NewPacketSource(handle, handle.LinkType())
 	} else if *sniffer == "pfring" {
 		//	ring, err := pfring.NewRing(*device, 65536, pfring.FlagPromisc)
 		//	if err != nil {
@@ -123,16 +149,21 @@ func main() {
 		//	}
 		//	err = ring.SetBPFFilter(filter)
 		//	err = ring.Enable()
-		//	packetSource = gopacket.NewPacketSource(ring, layers.LayerTypeEthernet)
+		//	pktSrc = gopacket.NewPacketSource(ring, layers.LayerTypeEthernet)
 		//	ring.SetSocketMode(pfring.ReadOnly)
 
 	}
 
-	if *match == "multinet" {
+	if *matcher == "multinet" {
 		m = matching.MultinetTraffic{}
 	}
 	intype = m.InMsg()
 	outtype = m.OutMsg()
+
+	// Setup finalization
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go report(sigs, reg, &st, cpuprofile)
 
 	// Layers for decoding
 	var (
@@ -148,9 +179,9 @@ func main() {
 
 Sniffing:
 
-	for packet := range packetSource.Packets() {
+	for pkt := range pktSrc.Packets() {
 
-		err := parser.DecodeLayers(packet.Data(), &decoded)
+		err := parser.DecodeLayers(pkt.Data(), &decoded)
 		if err != nil {
 			log.Println("Trouble decoding layers: ", err)
 		}
@@ -189,42 +220,46 @@ Sniffing:
 						// will be ignored here
 						if ofpver == 4 &&
 							(ofptype >= 0 || ofptype <= ofp14.OFPT_MAX_TYPE) {
-
 							ofPkt := tcp.Payload[i:ofpend]
-							//ofpxid := binary.BigEndian.Uint32(ofPkt[4:8])
+							st.ofcount += 1
 
 							switch ofptype {
 							case intype:
+								st.incount += 1
 								pattern := m.CheckIn(ofPkt, ip.SrcIP, uint16(tcp.SrcPort))
 								if pattern != nil {
+									st.inreg += 1
 									s := string(pattern)
 									log.Printf("C <- % x\n", pattern)
-									_, exists := checkedIn[s]
+									_, exists := reg[s]
 
-									// The pattern already exists in checkedIn map,
+									// The pattern already exists in reg map,
 									// this is a packet loss case
 									if exists {
-										lost += 1
+										st.lost += 1
 									}
-									checkedIn[s] = time.Now().UnixNano()
+									reg[s] = time.Now().UnixNano()
 								}
 							case outtype:
+								st.outcount += 1
 								pattern := m.CheckOut(ofPkt, ip.DstIP, uint16(tcp.DstPort))
 								if pattern != nil {
+									st.outreg += 1
 									s := string(pattern)
 									log.Printf("C -> % x\n", pattern)
-									val, exists := checkedIn[s]
+									val, exists := reg[s]
 									if exists {
+										st.outmat += 1
 										log.Printf("MATCH!!\n")
 										latency := float64((time.Now().UnixNano() - val) / 1000000.0)
-										if latency > *lateThreshold {
-											late += 1
+										if latency > *lateThres {
+											st.late += 1
 										}
-										h.Add(latency)
-										checkedIn[s] = 0
+										st.h.Add(latency)
+										reg[s] = 0
 									} else {
-										// unmatched replies... normal?
-										orphan += 1
+										// unmatched repliest... normal?
+										st.orphan += 1
 									}
 								}
 							} // end of switch ofptype
