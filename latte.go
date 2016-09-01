@@ -52,9 +52,11 @@ func report(c chan os.Signal, reg map[string]int64, st *Stats, cpuprofile *strin
 	fmt.Printf("Outmsg late: %d (%.1f%%)\n",
 		st.late, float64(st.late)*100.0/float64(st.outmat))
 	fmt.Printf("Outmsg orphan: %d\n", st.orphan)
+	fmt.Printf("Median latency (msec): %f\n", st.h.Quantile(float64(0.5)))
+	fmt.Printf("CDF at 1 msec: %f\n", st.h.CDF(float64(1)))
 	fmt.Printf("Mean latency (msec): %f\n", st.h.Mean())
-	fmt.Printf("99th percentile (msec): %f\n", st.h.Quantile(float64(0.99)))
-	fmt.Printf("95th percentile (msec): %f\n", st.h.Quantile(float64(0.95)))
+	fmt.Printf("~95th percentile (msec): %f\n", st.h.Quantile(float64(0.95)))
+	fmt.Printf("~99th percentile (msec): %f\n", st.h.Quantile(float64(0.99)))
 	if *cpuprofile != "" {
 		pprof.StopCPUProfile()
 	}
