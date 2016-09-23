@@ -81,6 +81,7 @@ func main() {
 			"Enable logging")
 		lateThres = flag.Float64("late-threshold", 2000.0,
 			"Threshold (msec) above which a late response is considered lost")
+		nanoLateThres = int64(*lateThres) * 1000000
 	)
 
 	// Packet matching
@@ -253,11 +254,14 @@ Sniffing:
 									if exists {
 										st.outmat += 1
 										log.Printf("MATCH!!\n")
-										latency := float64((time.Now().UnixNano() - val) / 1000000.0)
-										if latency > *lateThres {
+										latency := (time.Now().UnixNano() - val)
+										if latency < 0 {
+											panic("Negative latency?")
+										}
+										if latency > nanoLateThres {
 											st.late += 1
 										}
-										st.h.Add(latency)
+										st.h.Add(float64(latency) / 1000000.0)
 										reg[s] = 0
 									} else {
 										// unmatched repliest... normal?
