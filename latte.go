@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/VividCortex/gohistogram"
 	"github.com/anastop/latte/matching"
 	"github.com/anastop/latte/ofp14"
+	"github.com/codahale/hdrhistogram"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
@@ -23,7 +23,7 @@ import (
 
 // Stats collects statistics-related info about a run
 type Stats struct {
-	h                        *gohistogram.NumericHistogram
+	hist                     *hdrhistogram.Histogram
 	ofcount                  int64
 	incount, inreg           int64
 	outcount, outreg, outmat int64
@@ -39,9 +39,24 @@ func report(c chan os.Signal, reg map[string]int64, st *Stats, cpuprofile *strin
 			st.lost += 1
 		}
 	}
+	scalef := 1000000.0
 
-	fmt.Println("Latency histogram (msec)")
-	fmt.Println(st.h)
+	fmt.Println()
+	fmt.Println("Latency(ms)    Percentile    TotalCount")
+	fmt.Println("---------------------------------------")
+	for _, b := range st.hist.CumulativeDistribution() {
+		pct := b.Quantile / 100.0
+		fmt.Printf("%13.8f  %2.6f %15d\n",
+			float64(b.ValueAt)/scalef, pct, b.Count)
+	}
+	fmt.Println()
+	fmt.Printf("total_count: %d\n", st.hist.TotalCount())
+	fmt.Printf("min: %f\n", float64(st.hist.Min())/scalef)
+	fmt.Printf("max: %f\n", float64(st.hist.Max())/scalef)
+	fmt.Printf("mean: %f\n", st.hist.Mean()/scalef)
+	fmt.Printf("stddev: %f\n", st.hist.StdDev()/scalef)
+
+	fmt.Println()
 	fmt.Printf("Inmsg total: %d\n", st.incount)
 	fmt.Printf("Inmsg registered: %d\n", st.inreg)
 	fmt.Printf("Inmsg unreplied: %d (%.1f%%)\n",
@@ -52,11 +67,6 @@ func report(c chan os.Signal, reg map[string]int64, st *Stats, cpuprofile *strin
 	fmt.Printf("Outmsg late: %d (%.1f%%)\n",
 		st.late, float64(st.late)*100.0/float64(st.outmat))
 	fmt.Printf("Outmsg orphan: %d\n", st.orphan)
-	fmt.Printf("Median latency (msec): %f\n", st.h.Quantile(float64(0.5)))
-	fmt.Printf("CDF at 1 msec: %f\n", st.h.CDF(float64(1)))
-	fmt.Printf("Mean latency (msec): %f\n", st.h.Mean())
-	fmt.Printf("~95th percentile (msec): %f\n", st.h.Quantile(float64(0.95)))
-	fmt.Printf("~99th percentile (msec): %f\n", st.h.Quantile(float64(0.99)))
 	if *cpuprofile != "" {
 		pprof.StopCPUProfile()
 	}
@@ -118,7 +128,7 @@ func main() {
 
 	reg = make(map[string]int64)
 	st := Stats{}
-	st.h = gohistogram.NewHistogram(40)
+	st.hist = hdrhistogram.New(1, 20000000000, 2)
 
 	// Set filter
 	filter := "tcp and port " + *ofport
@@ -261,7 +271,7 @@ Sniffing:
 										if latency > nanoLateThres {
 											st.late += 1
 										}
-										st.h.Add(float64(latency) / 1000000.0)
+										st.hist.RecordValue(latency)
 										reg[s] = 0
 									} else {
 										// unmatched repliest... normal?
