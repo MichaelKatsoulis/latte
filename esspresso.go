@@ -5,11 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	//"os"
-	//"os/signal"
-	//"syscall"
 	"time"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/pcap"
 )
@@ -34,9 +30,6 @@ func main() {
 		log.SetOutput(ioutil.Discard)
 	}
 
-	// clientIP := "172.17.0.4"
-	// gorbIP := "10.0.2.15"
-
 	requestFilter := fmt.Sprintf("src %s and dst %s and (tcp[0xd] & tcp-syn) != 0", *clientIP, *gorbIP)
 	responseFilter := fmt.Sprintf("dst %s and (((ip[2:2] - ((ip[0]&0xf)<<2)) - ((tcp[12]&0xf0)>>2)) != 0)", *clientIP)
 
@@ -50,7 +43,7 @@ func main() {
 	var (
 		snapshotLen int32         = 1024
 		promiscuous bool          = true
-		timeout     time.Duration = 30 * time.Second
+		timeout     time.Duration = 1 * time.Second
 		handle_res  *pcap.Handle
 		handle_req  *pcap.Handle
 	)
@@ -78,27 +71,19 @@ func main() {
 	}
 	responsePacketSource = gopacket.NewPacketSource(handle_res, handle_res.LinkType())
 
-	// Setup finalization
-
-	/*
-	sigs_res := make(chan os.Signal, 1)
-	signal.Notify(sigs_res, syscall.SIGINT, syscall.SIGTERM)
-	//go report(sigs, reg, &st, cpuprofile)
-	sigs_req := make(chan os.Signal, 1)
-	signal.Notify(sigs_req, syscall.SIGINT, syscall.SIGTERM)
-        */
 	requests := 0
 	responses := 0
 
 	for {
 		select {
-		case _ = <-requestPacketSource.Packets():
+		case request := <-requestPacketSource.Packets():
+			log.Print(request)
 			requests += 1
-			log.Print("Requests: %s", requests)
-		case _ = <-responsePacketSource.Packets():
+			log.Print("Requests: ", requests)
+		case response := <-responsePacketSource.Packets():
+			log.Print(response)
 			responses += 1
-			log.Print("Responses: %s", responses)
+			log.Print("Responses: ", responses)
 		}
 	}
 }
-
