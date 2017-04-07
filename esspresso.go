@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"log"
 	"time"
 	"github.com/google/gopacket"
@@ -13,6 +14,9 @@ import (
 // main
 func main() {
 	var err error
+
+	requests := 0
+	responses := 0
 
 	// cmd line options
 	var (
@@ -29,6 +33,21 @@ func main() {
 		log.SetFlags(0)
 		log.SetOutput(ioutil.Discard)
 	}
+
+
+	go func() {
+		http.HandleFunc("/requests", func(w http.ResponseWriter, r *http.Request) {
+			if _, err := w.Write([]byte(fmt.Sprintf("%d\n", requests))); err != nil {
+				log.Fatal("Can't write rate")
+			}
+		})
+		http.HandleFunc("/responses", func(w http.ResponseWriter, r *http.Request) {
+			if _, err := w.Write([]byte(fmt.Sprintf("%d\n", responses))); err != nil {
+				log.Fatal("Can't write rate")
+			}
+		})
+		log.Fatal(http.ListenAndServe(":6666", nil))
+	}()
 
 	requestFilter := fmt.Sprintf("src %s and dst %s and (tcp[0xd] & tcp-syn) != 0", *clientIP, *gorbIP)
 	responseFilter := fmt.Sprintf("dst %s and (((ip[2:2] - ((ip[0]&0xf)<<2)) - ((tcp[12]&0xf0)>>2)) != 0)", *clientIP)
@@ -70,9 +89,6 @@ func main() {
 		log.Fatal(err)
 	}
 	responsePacketSource = gopacket.NewPacketSource(handle_res, handle_res.LinkType())
-
-	requests := 0
-	responses := 0
 
 	for {
 		select {
